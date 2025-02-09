@@ -47,6 +47,7 @@ class SchizophreniaTerminals {
         register(net.minecraftforge.client.event.GuiScreenEvent.DrawScreenEvent.Pre, (event) => {
             if(!this.inTerminal) return;
             cancel(event)
+            this.startMove();
         }) 
 
         register('packetReceived', () => {
@@ -76,11 +77,6 @@ class SchizophreniaTerminals {
         })
 
         register("tick", () => {
-            if(this.inTerminal) {
-                this.startMove();
-                ChatLib.chat(this.toShow)
-            }
-
             if(this.inTerminal || !Player.getContainer()) return;
 
             let iName = Player.getContainer().getName()
