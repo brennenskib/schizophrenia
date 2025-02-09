@@ -7,12 +7,21 @@ guiContainerTopField.setAccessible(true)
 const GuiChest = Java.type("net.minecraft.client.gui.inventory.GuiChest");
 const C0EPacketClickWindow = Java.type("net.minecraft.network.play.client.C0EPacketClickWindow");
 const C0DPacketCloseWindow = Java.type("net.minecraft.network.play.client.C0DPacketCloseWindow")
+
 const S2EPacketCloseWindow = Java.type("net.minecraft.network.play.server.S2EPacketCloseWindow")
 const S2DPacketOpenWindow = Java.type("net.minecraft.network.play.server.S2DPacketOpenWindow")
+const S2FPacketSetSlot = Java.type("net.minecraft.network.play.server.S2FPacketSetSlot")
 
-function click(windowId, slot, button = 0) {
+function getClickPacket(windowId, slot, button = 0) {
 	if (slot === undefined || button === undefined) return;
-	Client.sendPacket(new C0EPacketClickWindow(windowId, slot, button, 0, null, 0));
+	return new C0EPacketClickWindow(
+        windowId, 
+        slot, 
+        button, 
+        0, 
+        null,
+        0
+    );
 }
 
 const keyBinds = [
@@ -28,8 +37,11 @@ class SchizophreniaTerminals {
 
         this.toShow = 0;
         this.windowId = -1;
+        this.melodyClicks = 0;
 
         this.colorCycle = [1, 4, 13, 11, 14];
+        this.queue = [];
+
         this.colorList = {
             "light gray": "silver",
             "light grey": "silver",
@@ -58,6 +70,16 @@ class SchizophreniaTerminals {
             this.startMove();
         }).setFilteredClass(S2EPacketCloseWindow);
 
+        register('packetReceived', (packet, event) => {
+            if(!this.inTerminal) return;
+            ChatLib.chat('s2f')
+            let slot = packet.func_149173_d() // returns packet.slot (no mapped name);
+            if(slot == this.queue[0].func_149544_d()) { // getSlotId();
+                this.queue.splice(0, 1);
+                this.startQueue();
+            }
+        }).setFilteredClass(S2FPacketSetSlot)
+
         register("packetSent", () => {
             this.stop();
         }).setFilteredClass(C0EPacketClickWindow)
@@ -81,85 +103,45 @@ class SchizophreniaTerminals {
 
             let iName = Player.getContainer().getName()
             if(iName == "Click in order!") {
-                new Thread(() => {
-                    this.windowId = Player?.getContainer()?.getWindowId();
-                    this.inTerminal = true;
+                this.windowId = Player?.getContainer()?.getWindowId();
+                this.inTerminal = true;
+                this.getClickInOrderIndex().forEach(int => {
+                    this.queue.push(getClickPacket(this.windowId, int, 0))
+                })
 
-                    let a = this.getClickInOrderIndex();
-
-                    a.forEach((indx, index) => {
-                        if(index == 0) Thread.sleep(350)
-                        this.toShow = indx;
-                        click(this.windowId, this.toShow)
-                        Thread.sleep(200)
-                    })
-                    
-                    this.inTerminal = false;
-                }).start()
+                this.startQueue(true);
             } else if (iName.startsWith("Select all the ")) {
-                new Thread(() => {
-                    this.windowId = Player?.getContainer()?.getWindowId();
-                    this.inTerminal = true;
-
-                    let a = this.getClickInOrderIndex();
-
-                    a.forEach((indx, index) => {
-                        if(index == 0) Thread.sleep(350)
-                        this.toShow = indx;
-                        click(this.windowId, this.toShow)
-                        Thread.sleep(200)
-                    })
-                    
-                    this.inTerminal = false;
-                }).start()
+                this.windowId = Player?.getContainer()?.getWindowId();
+                this.inTerminal = true;
+                this.getColorIndex(iName).forEach(int => {
+                    this.queue.push(getClickPacket(this.windowId, int, 0))
+                })
+                
+                this.startQueue(true);
             } else if (iName.startsWith("What starts with: ")) {
-                new Thread(() => {
-                    this.windowId = Player?.getContainer()?.getWindowId();
-                    this.inTerminal = true;
-
-                    let a = this.getStartsWith(iName) 
-
-                    a.forEach((indx, index) => {
-                        if(index == 0) Thread.sleep(350)
-                        this.toShow = indx;
-                        click(this.windowId, this.toShow)
-                        Thread.sleep(200)
-                    })
-                    
-                    this.inTerminal = false;
-                }).start()
+                this.windowId = Player?.getContainer()?.getWindowId();
+                this.inTerminal = true;
+                this.getStartsWith(iName).forEach(int => {
+                    this.queue.push(getClickPacket(this.windowId, int, 0))
+                })
+                
+                this.startQueue(true);
             } else if (iName == "Change all to same color!") {
-                new Thread(() => {
-                    this.windowId = Player?.getContainer()?.getWindowId();
-                    this.inTerminal = true;
-
-                    let a = this.getSetAll();
-
-                    a.forEach((indx, index) => {
-                        if(index == 0) Thread.sleep(350)
-                        this.toShow = indx;
-                        click(this.windowId, this.toShow)
-                        Thread.sleep(200)
-                    })
-                    
-                    this.inTerminal = false;
-                }).start()
+                this.windowId = Player?.getContainer()?.getWindowId();
+                this.inTerminal = true;
+                this.optimizeColors().forEach(int => {
+                    this.queue.push(getClickPacket(this.windowId, int[0], int[1]))
+                })
+                
+                this.startQueue(true);
             } else if (iName == "Correct all the panes!") {
-                new Thread(() => {
-                    this.windowId = Player?.getContainer()?.getWindowId();
-                    this.inTerminal = true;
-
-                    let a = this.getCorrectAll();
-
-                    a.forEach((indx, index) => {
-                        if(index == 0) Thread.sleep(350)
-                        this.toShow = indx;
-                        click(this.windowId, this.toShow)
-                        Thread.sleep(200)
-                    })
-                    
-                    this.inTerminal = false;
-                }).start()
+                this.windowId = Player?.getContainer()?.getWindowId();
+                this.inTerminal = true;
+                this.processArray(this.getCorrectAll()).forEach(int => {
+                    this.queue.push(getClickPacket(this.windowId, int, 0))
+                })
+                
+                this.startQueue(true);
             } else if (iName == "Click the button on time!") {
                 this.windowId = Player?.getContainer()?.getWindowId();
                 this.inTerminal = true;
@@ -170,6 +152,19 @@ class SchizophreniaTerminals {
                     }
                 }).start();
             }
+        })
+    }
+
+    startQueue(first = false) {
+        Client.scheduleTask(first ? 3 : 1, () => {
+            Client.sendPacket(this.queue[0])
+
+            // im using this code for odinclient termsim dont worry about it 
+
+            // this.queue.splice(0, 1)
+            // setTimeout(() => {
+                // this.startQueue(false)
+            // }, 50);
         })
     }
 
@@ -239,16 +234,62 @@ class SchizophreniaTerminals {
         return r;
     }
 
-    getSetAll() {
-        let optimal = this.mode(Player.getContainer().getItems().filter((item, index) => item?.getDamage() != 15 && index <= 33).map(pane => pane?.getDamage()));
-        let r = [];
-
-        Player.getContainer().getItems().forEach((pane, index) => {
-            if (pane?.getDamage() == 15 || !pane) return;
-            for (let i = 0; i < Math.abs(this.colorCycle.indexOf(optimal) - this.colorCycle.indexOf(pane.getDamage())); i++) r.push(index);
+    findMostRepeatedMetadata(items) {
+        const itemMetadataCounts = new Map();
+    
+        const validItems = items.filter(item =>
+            item &&
+            item.getMetadata &&
+            item.getMetadata() !== 15 &&
+            item.getID &&
+            item.getID() === 160
+        );
+    
+        validItems.forEach(item => {
+            const metadata = String(item.getMetadata());
+            itemMetadataCounts.set(metadata, (itemMetadataCounts.get(metadata) || 0) + 1);
         });
-
-        return r;
+    
+        let mostRepeatedMetadata = null;
+        let maxCount = 0;
+    
+        itemMetadataCounts.forEach((count, metadata) => {
+            if (count > maxCount) {
+                maxCount = count;
+                mostRepeatedMetadata = metadata;
+            }
+        });
+    
+        return parseInt(mostRepeatedMetadata);
+    }
+    
+    optimizeColors() {
+        const colorOrder = [13, 11, 14, 1, 4];
+        const mostRepeatedMetadata = this.findMostRepeatedMetadata(Player.getContainer().getItems());
+        const result = [];
+    
+        Player.getContainer().getItems().forEach((item, index) => {
+            if (item && item.getMetadata) {
+                const currentMetadata = item.getMetadata();
+    
+                if (currentMetadata !== 15 && currentMetadata !== mostRepeatedMetadata) {
+                    const currentIndex = colorOrder.indexOf(currentMetadata);
+                    const targetIndex = colorOrder.indexOf(mostRepeatedMetadata);
+    
+                    const leftClicks = (targetIndex - currentIndex + colorOrder.length) % colorOrder.length;
+                    const rightClicks = (currentIndex - targetIndex + colorOrder.length) % colorOrder.length;
+    
+                    const actionNumber = leftClicks > rightClicks ? 1 : 0;
+                    const clicks = Math.min(leftClicks, rightClicks);
+    
+                    for (let i = 0; i < clicks; i++) {
+                        result.push([index, actionNumber]);
+                    }
+                }
+            }
+        });
+    
+        return result;
     }
 
     getStartsWith(iName) {
@@ -294,16 +335,24 @@ class SchizophreniaTerminals {
         let buttonToPress = [16,25,34,43];
 
         possibilities.forEach(slotIndex => {
-            if(Player.getContainer().getStackInSlot(slotIndex).getMetadata() == 2) row = slotIndex;
+            if(!Player?.getContainer()?.getStackInSlot(slotIndex)) return this.inTerminal = false;
+            if(Player?.getContainer()?.getStackInSlot(slotIndex)?.getMetadata() == 2) row = slotIndex;
         })
 
         rows.forEach((number, index) => {
+            if(!this.inTerminal) return;
             let slot = number + row;
-            if(Player.getContainer().getStackInSlot(slot).getMetadata() == 5) {
+            if(Player?.getContainer()?.getStackInSlot(slot)?.getMetadata() == 5) {
                 let column = Math.floor(slot/9) - 1;
-                click(this.windowId, buttonToPress[column])
+
+                Client.sendPacket(getClickPacket(this.windowId, buttonToPress[column], 2))
                 this.toShow = buttonToPress[column];
-                //inventoryRape.sendClick(buttonToPress[column], ClickType.CURRENT);
+                this.melodyClicks++
+
+                if(this.melodyClicks == 4) {
+                    this.melodyClicks = 0;
+                    this.inTerminal = false;
+                }
             }
         })
     }
